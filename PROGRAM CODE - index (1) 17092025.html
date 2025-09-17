@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wealth Planner Pro - Ultimate Projection</title>
+  <!-- Recharts + React + Babel (for in-browser JSX) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+  <!-- html2canvas & jsPDF -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <style>
+    :root{
+      --page-bg:#f9fafb;
+      --page-text:#111827;
+      --muted:#6b7280;
+      --card-bg:#ffffff;
+      --card-border:#e5e7eb;
+      --brand:#0284C7;
+      --brand-2:#0ea5e9;
+      --ok:#059669;
+      --warn:#dc2626;
+      --gold:#EAB308;
+      --grid:#E5E7EB;
+      --slate:#334155;
+      --violet:#8B5CF6;
+      --emerald:#10B981;
+      --orange:#F97316;
+      --red:#EF4444;
+    }
+    body[data-theme="dark"]{
+      --page-bg:#0f172a;
+      --page-text:#e2e8f0;
+      --muted:#94a3b8;
+      --card-bg:#1e293b;
+      --card-border:#334155;
+      --grid:#334155;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Cantarell, Noto Sans, Ubuntu, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:var(--page-bg);
+      color:var(--page-text);
+    }
+    .container{max-width:1200px;margin:0 auto;padding:24px;}
+    header{display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:16px}
+    h1{margin:0;font-size:28px}
+    .muted{color:var(--muted)}
+    .row{display:grid;grid-template-columns:1fr;gap:24px}
+    @media(min-width:1024px){.row{grid-template-columns:1fr 1fr}}
+    .card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:20px;padding:20px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .section-title{font-weight:600;margin:0 0 12px 0}
+    .grid-3{display:grid;grid-template-columns:1fr;gap:16px}
+    @media(min-width:768px){.grid-3{grid-template-columns:repeat(3,1fr)}}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input[type="text"],input[type="number"]{
+      width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--card-border);background:var(--card-bg);color:var(--page-text);
+      outline:none;
+    }
+    input[type="text"]::placeholder{color:#94a3b8}
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+    input[type="range"]{width:100%}
+    .rowline{display:grid;grid-template-columns:1fr;gap:10px;align-items:center;padding:8px 0}
+    @media(min-width:768px){.rowline{grid-template-columns:180px 1fr}}
+    .inline{display:flex;gap:8px;align-items:center}
+    .btn{display:inline-block;padding:10px 14px;border-radius:12px;border:1px solid var(--card-border);background:#fff;color:#111827;font-weight:600;cursor:pointer}
+    .btn:hover{filter:brightness(0.98)}
+    .btn:active{transform:scale(0.98)}
+    .btn-primary{background:#059669;color:#fff;border-color:#047857}
+    .btn-dark{background:#0f172a;color:#fff;border-color:#0f172a}
+    .btn-sun{background:#f59e0b;color:#fff;border-color:#d97706}
+    .chip{padding:6px 10px;border-radius:999px;border:1px solid var(--card-border);background:#fff;font-size:12px}
+    .chip.active{background:#0284c7;color:#fff;border-color:#0369a1}
+    .stat{border:1px solid var(--card-border);border-radius:16px;padding:14px}
+    .stat .label{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+    .stat .value{font-size:18px;font-weight:600;margin-top:4px}
+    .mt-8{margin-top:24px}
+    .footer{margin-top:40px;text-align:center;font-size:12px;color:var(--muted)}
+    .legend-buttons{display:flex;gap:8px;align-items:center}
+    .danger{color:var(--warn)}
+    .success{color:var(--ok)}
+    .note{font-size:12px;color:var(--muted);margin-top:8px}
+    .titlebar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+    .chart-wrap{width:100%;height:760px}
+    @media(min-width:1024px){.chart-wrap{height:860px}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const {
+      Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, CartesianGrid, ReferenceLine, ComposedChart, Legend
+    } = Recharts;
+    const { jsPDF } = window.jspdf;
+
+    // ===== Palette (HEX only) =====
+    const PALETTE = {
+      nominal: "#0284C7",
+      real: "#334155",
+      contrib: "#10B981",
+      returns: "#8B5CF6",
+      retirement: "#EAB308",
+      delay: "#F97316",
+      spend: "#EF4444",
+      grid: "#E5E7EB",
+    };
+
+    const fmtAUD = (n) =>
+      new Intl.NumberFormat("en-AU", { style:"currency", currency:"AUD", maximumFractionDigits:0, minimumFractionDigits:0 })
+      .format(Number.isFinite(n) ? n : 0);
+
+    const fmtPct = (n) => \`\${(n*100).toFixed(1)}%\`;
+    const clamp = (v,min,max) => Math.min(Math.max(v,min),max);
+    const parseMoney = (s) => {
+      if (typeof s === "number") return Math.max(0, Math.floor(s));
+      const digits = String(s || "").replace(/[^0-9]/g, "");
+      return digits ? Math.max(0, parseInt(digits,10)) : 0;
+    };
+    const fmtYAxis = (v) => {
+      const n = Math.round(v);
+      if (Math.abs(n) >= 1_000_000) return \`\${(n/1_000_000).toFixed(1)}m\`;
+      if (Math.abs(n) >= 1_000) return \`\${Math.round(n/1_000)}k\`;
+      return \`\${n}\`;
+    };
+
+    function projectBalances({
+      currentAge, retireAge, lifeExpectancy, initialBalance, monthlyContribution,
+      annualReturn, inflation, targetNestEgg, annualSpendToday = 0, delayYears = 0,
+    }){
+      const monthlyRate = Math.pow(1+annualReturn, 1/12) - 1;
+      const monthlyInfl = Math.pow(1+inflation, 1/12) - 1;
+      const years = Math.max(0, lifeExpectancy - currentAge);
+      const monthsTotal = Math.round(years * 12);
+      const monthsToRet = Math.max(0, Math.round((retireAge - currentAge) * 12));
+      const monthsDelay = Math.max(0, Math.min(Math.round(delayYears * 12), Math.max(0, monthsToRet - 1)));
+
+      let bal = Math.max(0, initialBalance);
+      let cumContrib = 0, cumReturns = 0, cumWithdrawals = 0;
+      let depletedAge = null;
+
+      const rows = [];
+      let balAtRet = bal, realAtRet = bal, contribAtRet = 0, returnsAtRet = 0;
+
+      for(let m=1;m<=monthsTotal;m++){
+        const ageNow = currentAge + m/12;
+        const isContribMonth = m > monthsDelay && m <= monthsToRet;
+        const contrib = isContribMonth ? Math.max(0, monthlyContribution) : 0;
+
+        const prev = bal;
+        const growth = prev * monthlyRate;
+        const monthsSinceRet = Math.max(0, m - monthsToRet);
+        const withdraw = monthsSinceRet > 0 ? (annualSpendToday/12) * Math.pow(1+monthlyInfl, monthsSinceRet) : 0;
+        bal = prev + growth + contrib - withdraw;
+
+        cumContrib += contrib; cumReturns += growth; cumWithdrawals += withdraw;
+        if (bal <= 0 && depletedAge === null){ depletedAge = ageNow; }
+        if (bal < 0) bal = 0;
+        const realBal = bal / Math.pow(1+monthlyInfl, m);
+
+        if (m % 12 === 0){
+          const ageYear = Math.floor(ageNow);
+          rows.push({
+            age: ageYear,
+            nominalBalance: bal,
+            realBalance: realBal,
+            cumulativeContributions: cumContrib,
+            cumulativeReturns: cumReturns,
+            cumulativeWithdrawals: cumWithdrawals,
+          });
+        }
+        if (m === monthsToRet){
+          balAtRet = bal; realAtRet = realBal; contribAtRet = cumContrib; returnsAtRet = cumReturns;
+        }
+      }
+      if (rows.length === 0){
+        rows.push({
+          age: Math.floor(currentAge),
+          nominalBalance: bal,
+          realBalance: bal,
+          cumulativeContributions: cumContrib,
+          cumulativeReturns: cumReturns,
+          cumulativeWithdrawals: cumWithdrawals,
+        });
+      }
+
+      const n = monthsToRet - monthsDelay;
+      const PV = Math.max(0, initialBalance);
+      const FV = Math.max(0, targetNestEgg);
+      let requiredMonthlyToTarget = 0;
+      if (n <= 0) requiredMonthlyToTarget = 0;
+      else if (Math.abs(monthlyRate) < 1e-9) requiredMonthlyToTarget = (FV - PV) / n;
+      else {
+        const r = monthlyRate, factor = Math.pow(1 + r, n);
+        requiredMonthlyToTarget = (FV - PV * factor) * (r / (factor - 1));
+      }
+
+      return {
+        chartData: rows,
+        depletedAge,
+        retirementSummary: {
+          ageAtRetirement: retireAge,
+          nominalAtRet: balAtRet,
+          realAtRet: realAtRet,
+          totalContribToRet: contribAtRet,
+          totalReturnsToRet: returnsAtRet,
+          gapToTarget: FV - balAtRet,
+          isFunded: balAtRet >= FV,
+        },
+        requiredMonthlyToTarget,
+        totalContribToRet: contribAtRet,
+        totalReturnsToRet: returnsAtRet,
+        monthlyRate, monthlyInfl
+      };
+    }
+
+    function App(){
+      const [themeDark, setThemeDark] = React.useState(false);
+      React.useEffect(()=>{
+        document.body.setAttribute("data-theme", themeDark ? "dark" : "light");
+      },[themeDark]);
+
+      const [currentAge, setCurrentAge] = React.useState(40);
+      const [retireAge, setRetireAge] = React.useState(60);
+      const [lifeExpectancy, setLifeExpectancy] = React.useState(90);
+      const [initialBalance, setInitialBalance] = React.useState(150000);
+      const [monthlyContribution, setMonthlyContribution] = React.useState(3000);
+      const [annualReturn, setAnnualReturn] = React.useState(0.10);
+      const [inflation, setInflation] = React.useState(0.03);
+      const [targetNestEgg, setTargetNestEgg] = React.useState(2500000);
+      const [annualSpendToday, setAnnualSpendToday] = React.useState(60000);
+      const [delayYears, setDelayYears] = React.useState(0);
+      const [showReturns, setShowReturns] = React.useState(true);
+      const [showSpending, setShowSpending] = React.useState(true);
+
+      // Client info (for PDF header)
+      const [clientName, setClientName] = React.useState("");
+      const [clientLocation, setClientLocation] = React.useState("");
+      const [clientOccupation, setClientOccupation] = React.useState("");
+      const [clientAnnualIncome, setClientAnnualIncome] = React.useState(0);
+      const [clientPassiveIncomeGoal, setClientPassiveIncomeGoal] = React.useState(0);
+      const [clientFamily, setClientFamily] = React.useState("");
+
+      const reportRef = React.useRef(null);
+      const exportPDF = async () => {
+        const node = reportRef.current;
+        if (!node) return;
+        const wasDark = themeDark;
+        if (wasDark) setThemeDark(false);
+        await new Promise(r=>setTimeout(r,80));
+        const pdf = new jsPDF('p','mm','a4');
+        const canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+        const img = canvas.toDataURL('image/png');
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 10;
+        const maxW = pageWidth - margin*2;
+        const maxH = pageHeight - margin*2;
+        const pxPerMM = 96/25.4;
+        const imgWmm = canvas.width/pxPerMM;
+        const imgHmm = canvas.height/pxPerMM;
+        const scale = Math.min(maxW/imgWmm, maxH/imgHmm, 1);
+        const renderW = imgWmm*scale, renderH = imgHmm*scale;
+
+        pdf.addImage(img, 'PNG', (pageWidth-renderW)/2, (pageHeight-renderH)/2, renderW, renderH, undefined, 'FAST');
+        const fname = \`Wealth_Planner_Pro_\${(clientName||'Report').replace(/[^a-z0-9_-]+/gi,'_')}_\${new Date().toISOString().slice(0,10)}.pdf\`;
+        pdf.save(fname);
+        if (wasDark) setThemeDark(true);
+      };
+
+      const base = React.useMemo(()=>projectBalances({
+        currentAge, retireAge, lifeExpectancy, initialBalance, monthlyContribution,
+        annualReturn, inflation, targetNestEgg, annualSpendToday, delayYears: 0,
+      }),[currentAge, retireAge, lifeExpectancy, initialBalance, monthlyContribution, annualReturn, inflation, targetNestEgg, annualSpendToday]);
+
+      const delayed = React.useMemo(()=>projectBalances({
+        currentAge, retireAge, lifeExpectancy, initialBalance, monthlyContribution,
+        annualReturn, inflation, targetNestEgg, annualSpendToday, delayYears,
+      }),[currentAge, retireAge, lifeExpectancy, initialBalance, monthlyContribution, annualReturn, inflation, targetNestEgg, annualSpendToday, delayYears]);
+
+      const chartData = React.useMemo(()=>{
+        const map = new Map();
+        base.chartData.forEach(r=>map.set(r.age, {...r}));
+        delayed.chartData.forEach(r=>{
+          const prev = map.get(r.age) || { age: r.age };
+          map.set(r.age, { ...prev, delayedBalance: r.nominalBalance });
+        });
+        return Array.from(map.values()).sort((a,b)=>a.age-b.age);
+      },[base.chartData, delayed.chartData]);
+
+      const rs = base.retirementSummary;
+      const costOfDelay = Math.max(0, rs.nominalAtRet - delayed.retirementSummary.nominalAtRet);
+      const depletedAgeYear = base.depletedAge ? Math.floor(base.depletedAge) : null;
+      const gapColor = rs.gapToTarget <= 0 ? "success" : "danger";
+
+      const ReturnPreset = ({p}) => (
+        <button className={"chip " + (annualReturn===p?"active":"")} onClick={()=>setAnnualReturn(p)}>{(p*100).toFixed(0)}%</button>
+      );
+
+      const MoneyInput = ({value, onChange, prefix="$"}) => {
+        const [focused, setFocused] = React.useState(false);
+        const [text, setText] = React.useState("");
+        React.useEffect(()=>{
+          if (!focused) setText(new Intl.NumberFormat("en-AU",{maximumFractionDigits:0}).format(Math.max(0,Math.floor(value||0))));
+        },[value,focused]);
+        const commit = () => {
+          const v = parseMoney(text);
+          onChange(v);
+          setText(new Intl.NumberFormat("en-AU",{maximumFractionDigits:0}).format(Math.max(0,Math.floor(v||0))));
+        };
+        return (
+          <div className="inline">
+            {prefix && <span className="muted">{prefix}</span>}
+            <input type="text" inputMode="numeric" pattern="[0-9,]*"
+              value={text}
+              onFocus={()=>setFocused(true)}
+              onBlur={()=>{ setFocused(false); commit(); }}
+              onKeyDown={(e)=>{ if (e.key==="Enter"){ commit(); e.currentTarget.blur(); } }}
+              onChange={(e)=> setText(e.target.value.replace(/[^0-9,]/g,"")) }
+              aria-label="currency input"
+            />
+          </div>
+        );
+      };
+
+      const NumberInput = ({value, onChange, min, max, step=1, suffix}) => (
+        <div className="inline">
+          <input type="number" value={value} min={min} max={max} step={step} onChange={(e)=>onChange(Number(e.target.value))} />
+          {suffix && <span className="muted">{suffix}</span>}
+        </div>
+      );
+      const Range = ({value, onChange, min, max, step=1}) => (
+        <input type="range" value={value} min={min} max={max} step={step} onChange={(e)=>onChange(Number(e.target.value))} />
+      );
+
+      return (
+        <div className="container" ref={reportRef}>
+          <header>
+            <div>
+              <h1>Wealth Planner Pro - Ultimate Projection</h1>
+              <p className="muted">Interactive wealth projection with nominal vs real balances, contributions, returns, retirement spending, and a clear retirement target.</p>
+            </div>
+            <div className="inline">
+              <button className="btn btn-primary" onClick={exportPDF}>Export PDF</button>
+              <button className={"btn "+(themeDark?"btn-sun":"btn-dark")} onClick={()=>setThemeDark(v=>!v)}>{themeDark?"Day Mode":"Night Mode"}</button>
+            </div>
+          </header>
+
+          <section className="card">
+            <h2 className="section-title">Client Details</h2>
+            <div className="grid-3">
+              <div>
+                <label>Name</label>
+                <input type="text" value={clientName} onChange={(e)=>setClientName(e.target.value)} placeholder="e.g., Michael Leggo" />
+              </div>
+              <div>
+                <label>Age</label>
+                <NumberInput value={currentAge} onChange={(v)=>setCurrentAge(clamp(v,18,retireAge-1))} min={18} max={retireAge-1} />
+              </div>
+              <div>
+                <label>Location</label>
+                <input type="text" value={clientLocation} onChange={(e)=>setClientLocation(e.target.value)} placeholder="City, Country"/>
+              </div>
+              <div>
+                <label>Occupation</label>
+                <input type="text" value={clientOccupation} onChange={(e)=>setClientOccupation(e.target.value)} placeholder="e.g., Project Manager"/>
+              </div>
+              <div>
+                <label>Annual Income</label>
+                <MoneyInput value={clientAnnualIncome} onChange={setClientAnnualIncome} />
+              </div>
+              <div>
+                <label>Retirement Age</label>
+                <NumberInput value={retireAge} onChange={(v)=>setRetireAge(clamp(v,currentAge+1,lifeExpectancy-1))} min={currentAge+1} max={lifeExpectancy-1} />
+              </div>
+              <div>
+                <label>Passive Income Goal</label>
+                <MoneyInput value={clientPassiveIncomeGoal} onChange={setClientPassiveIncomeGoal} />
+              </div>
+              <div style={{gridColumn:"1 / -1"}}>
+                <label>Family</label>
+                <input type="text" value={clientFamily} onChange={(e)=>setClientFamily(e.target.value)} placeholder="e.g., married, 2 kids (ages 4 & 7)"/>
+              </div>
+            </div>
+          </section>
+
+          <section className="row mt-8">
+            <div className="card">
+              <h2 className="section-title">Profile</h2>
+              <div className="rowline">
+                <div className="muted">Current age</div>
+                <div className="inline" style={{flexDirection:"column", alignItems:"stretch"}}>
+                  <NumberInput value={currentAge} onChange={(v)=>setCurrentAge(clamp(v,18,retireAge-1))} min={18} max={retireAge-1}/>
+                  <Range value={currentAge} onChange={(v)=>setCurrentAge(clamp(v,18,retireAge-1))} min={18} max={retireAge-1}/>
+                </div>
+              </div>
+              <div className="rowline">
+                <div className="muted">Retirement age</div>
+                <div className="inline" style={{flexDirection:"column", alignItems:"stretch"}}>
+                  <NumberInput value={retireAge} onChange={(v)=>setRetireAge(clamp(v,currentAge+1,lifeExpectancy-1))} min={currentAge+1} max={lifeExpectancy-1}/>
+                  <Range value={retireAge} onChange={(v)=>setRetireAge(clamp(v,currentAge+1,lifeExpectancy-1))} min={currentAge+1} max={lifeExpectancy-1}/>
+                </div>
+              </div>
+              <div className="rowline">
+                <div className="muted">Life expectancy</div>
+                <div className="inline" style={{flexDirection:"column", alignItems:"stretch"}}>
+                  <NumberInput value={lifeExpectancy} onChange={(v)=>setLifeExpectancy(clamp(v,retireAge+1,110))} min={retireAge+1} max={110}/>
+                  <Range value={lifeExpectancy} onChange={(v)=>setLifeExpectancy(clamp(v,retireAge+1,110))} min={retireAge+1} max={110}/>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <h2 className="section-title">Capital & Targets</h2>
+              <div className="rowline">
+                <div className="muted">Initial balance</div>
+                <div className="inline" style={{flexDirection:"column", alignItems:"stretch"}}>
+                  <MoneyInput value={initialBalance} onChange={(v)=>setInitialBalance(Math.max(0,v))}/>
+                  <Range value={initialBalance} onChange={(v)=>setInitialBalance(Math.max(0,v))} min={0} max={5000000} step={5000}/>
+                </div>
+              </div>
+              <div className="rowline">
+                <div className="muted">Monthly contribution</div>
+                <div className="inline" style={{flexDirection:"column", alignItems:"stretch"}}>
+                  <MoneyInput value={monthlyContribution} onChange={(v)=>setMonthlyContribution(Math.max(0,v))}/>
+                  <Range value={monthlyContribution} onChange={(v)=>setMonthlyContribution(Math.max(0,v))} min={0} max={25000} step={100}/>
+                </div>
+              </div>
+              <div className="rowline">
+                <div className="muted">Target nest egg at retirement</div>
+                <div className="inline" style={{flexDirection:"column", alignItems:"stretch"}}>
+                  <MoneyInput value={targetNestEgg} onChange={(v)=>setTargetNestEgg(Math.max(0,v))}/>
+                  <Range value={targetNestEgg} onChange={(v)=>setTargetNestEgg(Math.max(0,v))} min={0} max={20000000} step={50000}/>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <h2 className="section-title">Returns, Inflation & Spending</h2>
+              <div className="rowline">
+                <div className="muted">Annual return ({fmtPct(annualReturn)})</div>
+                <div className="inline" style={{flexDirection:"column", alignItems:"stretch", gap:8}}>
+                  <div className="inline" style={{flexWrap:"wrap"}}>
+                    {[0.08,0.10,0.15,0.20].map(p=> <ReturnPreset key={p} p={p} />)}
+                  </div>
+                  <div className="inline" style={{gap:8}}>
+                    <div style={{flex:1}}><Range value={Math.round(annualReturn*1000)/10} onChange={(v)=>setAnnualReturn(Number((v/100).toFixed(4)))} min={0} max={30} step={0.1}/></div>
+                    <div style={{width:150}}><NumberInput value={Math.round(annualReturn*1000)/10} onChange={(v)=>setAnnualReturn(Number((v/100).toFixed(4)))} min={0} max={50} step={0.1} suffix="%"/></div>
+                  </div>
+                </div>
+              </div>
+              <div className="rowline">
+                <div className="muted">Inflation ({fmtPct(inflation)})</div>
+                <div className="inline" style={{gap:8}}>
+                  <div style={{flex:1}}><Range value={Math.round(inflation*1000)/10} onChange={(v)=>setInflation(Number((v/100).toFixed(4)))} min={0} max={15} step={0.1}/></div>
+                  <div style={{width:150}}><NumberInput value={Math.round(inflation*1000)/10} onChange={(v)=>setInflation(Number((v/100).toFixed(4)))} min={0} max={50} step={0.1} suffix="%"/></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <h2 className="section-title">Behavior & Timing</h2>
+              <div className="rowline">
+                <div className="muted">Cost of delaying (years): {delayYears}</div>
+                <div className="inline" style={{gap:8}}>
+                  <div style={{flex:1}}><Range value={delayYears} onChange={setDelayYears} min={0} max={10} step={1}/></div>
+                  <div style={{width:150}}><NumberInput value={delayYears} onChange={(v)=>setDelayYears(clamp(v,0,10))} min={0} max={10} step={1}/></div>
+                </div>
+              </div>
+              <div className="rowline">
+                <div className="muted">Annual spend (today $)</div>
+                <div className="inline" style={{flexDirection:"column", alignItems:"stretch"}}>
+                  <MoneyInput value={annualSpendToday} onChange={(v)=>setAnnualSpendToday(Math.max(0,v))}/>
+                  <Range value={annualSpendToday} onChange={(v)=>setAnnualSpendToday(Math.max(0,v))} min={0} max={500000} step={1000}/>
+                </div>
+              </div>
+              <div className="note">Spending starts at retirement and inflates with your inflation setting (today $ indexed each year). The chart shows your balance after spending.</div>
+            </div>
+          </section>
+
+          <section className="card mt-8">
+            <div className="titlebar">
+              <h2 className="section-title" style={{marginBottom:0}}>Projection</h2>
+              <div className="legend-buttons">
+                <button className="btn" onClick={()=>setShowReturns(v=>!v)}>{showReturns ? 'Hide "Returns (cum)"' : 'Show "Returns (cum)"'}</button>
+                <button className="btn" onClick={()=>setShowSpending(v=>!v)}>{showSpending ? 'Hide "Spending (cum)"' : 'Show "Spending (cum)"'}</button>
+              </div>
+            </div>
+            <div className="chart-wrap">
+              <ResponsiveContainer>
+                <ComposedChart data={chartData} margin={{ top: 80, right: 56, left: 24, bottom: 34 }}>
+                  <CartesianGrid stroke={PALETTE.grid} strokeDasharray="3 3" />
+                  <XAxis dataKey="age" tickFormatter={(t)=>\`\${t}\`} tick={{ fill: "#374151" }} />
+                  <YAxis tickFormatter={fmtYAxis} tick={{ fill: "#374151" }} />
+                  <Tooltip formatter={(val, name)=>[fmtAUD(val), name]} labelFormatter={(l)=>\`Age \${l}\`} contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#111827' }} />
+                  <Legend verticalAlign="top" align="right" wrapperStyle={{ color: '#111827' }} />
+
+                  <Area type="monotone" dataKey="cumulativeContributions" stackId="1" name="Contributions (cum)" fill={PALETTE.contrib} stroke={PALETTE.contrib} fillOpacity={0.18} />
+                  {showReturns && (
+                    <Area type="monotone" dataKey="cumulativeReturns" stackId="1" name="Returns (cum)" fill={PALETTE.returns} stroke={PALETTE.returns} fillOpacity={0.16} />
+                  )}
+
+                  <Line type="monotone" dataKey="nominalBalance" name="Balance (nominal)" stroke={PALETTE.nominal} strokeWidth={3} dot={false} />
+                  <Line type="monotone" dataKey="realBalance" name="Balance (real)" stroke={PALETTE.real} strokeWidth={3} strokeDasharray="6 6" dot={false} />
+                  {showSpending && (
+                    <Line type="monotone" dataKey="cumulativeWithdrawals" name="Spending (cum)" stroke={PALETTE.spend} strokeWidth={2} strokeDasharray="4 4" dot={false} />
+                  )}
+                  <Line type="monotone" dataKey="delayedBalance" name={`Delayed start (${delayYears}y)`} stroke={PALETTE.delay} strokeWidth={3} strokeDasharray="8 4" dot={false} />
+
+                  <ReferenceLine x={retireAge} stroke={PALETTE.retirement} strokeWidth={3} strokeDasharray="6 3" ifOverflow="extendDomain" isFront
+                    label={{ value: `Retirement ${retireAge}`, position: "insideTop", dy: 14, fill: PALETTE.retirement, fontWeight: 800 }} />
+                  {depletedAgeYear && (
+                    <ReferenceLine x={depletedAgeYear} stroke={PALETTE.spend} strokeWidth={3} strokeDasharray="4 4" ifOverflow="extendDomain" isFront
+                      label={{ value: `Depleted ${depletedAgeYear}`, position: "insideTop", dy: 32, fill: PALETTE.spend, fontWeight: 800 }} />
+                  )}
+                  <ReferenceLine y={targetNestEgg} stroke="#94A3B8" strokeDasharray="6 3" ifOverflow="extendDomain" isFront
+                    label={{ value: `Target ${fmtAUD(targetNestEgg)}`, position: "insideTopRight", dx: -10, dy: -28, fill: "#334155", fontWeight: 700 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="note">Contributions stop at retirement; spending starts at retirement and is indexed with inflation. Real balance is inflation-adjusted using the inflation slider.</p>
+          </section>
+
+          <section className="mt-8">
+            <div className="card">
+              <h2 className="section-title">At-a-glance</h2>
+              <div className="grid-3">
+                <div className="stat"><div className="label">Monthly investment</div><div className="value">{fmtAUD(monthlyContribution)}</div></div>
+                <div className="stat"><div className="label">Annual investment</div><div className="value">{fmtAUD(monthlyContribution*12)}</div></div>
+                <div className="stat"><div className="label">Annual spend (today $)</div><div className="value">{fmtAUD(annualSpendToday)}</div></div>
+                <div className="stat"><div className="label">Balance at retirement (nominal)</div><div className="value">{fmtAUD(rs.nominalAtRet||0)}</div></div>
+                <div className="stat"><div className="label">Balance at retirement (real)</div><div className="value">{fmtAUD(rs.realAtRet||0)}</div></div>
+                <div className="stat"><div className="label">Total contributions to retirement</div><div className="value">{fmtAUD(base.totalContribToRet)}</div></div>
+                <div className="stat"><div className="label">Total returns to retirement</div><div className="value">{fmtAUD(base.totalReturnsToRet)}</div></div>
+                <div className="stat"><div className="label">Target nest egg</div><div className="value">{fmtAUD(targetNestEgg)}</div></div>
+                <div className="stat"><div className="label">Gap to target</div><div className={"value "+gapColor}>{fmtAUD(rs.gapToTarget)}</div></div>
+                <div className="stat"><div className="label">Cost of delaying ({delayYears}y)</div><div className="value danger">{fmtAUD(costOfDelay)}</div></div>
+              </div>
+              <div className="note">
+                {rs.isFunded ? <span className="success" style={{fontWeight:600}}>On track</span> :
+                  <span>Required monthly to hit target: <span style={{fontWeight:600}}>{fmtAUD(Math.max(0, base.requiredMonthlyToTarget))}</span></span>}
+                {depletedAgeYear ?
+                  <span style={{marginLeft:12}}>• Funds depleted around age <span style={{fontWeight:600}}>{depletedAgeYear}</span></span> :
+                  <span style={{marginLeft:12}}>• Funds last beyond age <span style={{fontWeight:600}}>{lifeExpectancy}</span></span>}
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-8 row">
+            <div className="card" style={{gridColumn:"1 / -1"}}>
+              <h2 className="section-title">Summary</h2>
+              <ul style={{margin:0,paddingLeft:18,lineHeight:1.6,fontSize:14}}>
+                <li>You contribute until age <strong>{retireAge}</strong>, then contributions cease and spending begins.</li>
+                <li>Estimated nominal balance at retirement: <strong>{fmtAUD(rs.nominalAtRet)}</strong> (real: <strong>{fmtAUD(rs.realAtRet)}</strong>).</li>
+                <li>Total contributed by retirement: <strong>{fmtAUD(base.totalContribToRet)}</strong>; total returns accrued: <strong>{fmtAUD(base.totalReturnsToRet)}</strong>.</li>
+                <li>Target at retirement: <strong>{fmtAUD(targetNestEgg)}</strong>. Gap: <strong className={gapColor}>{fmtAUD(rs.gapToTarget)}</strong>.</li>
+                {depletedAgeYear ?
+                  <li>With annual spend of <strong>{fmtAUD(annualSpendToday)}</strong> (today $), funds run out around age <strong>{depletedAgeYear}</strong>.</li> :
+                  <li>With annual spend of <strong>{fmtAUD(annualSpendToday)}</strong> (today $), funds last beyond age <strong>{lifeExpectancy}</strong>.</li>
+                }
+                {!rs.isFunded && (
+                  <li>To reach the target with current settings, estimated required monthly savings is <strong>{fmtAUD(Math.max(0, base.requiredMonthlyToTarget))}</strong>.</li>
+                )}
+              </ul>
+            </div>
+          </section>
+
+          <div className="footer">© ${(new Date()).getFullYear()} Wealth Planner Pro - Ultimate Projection</div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
